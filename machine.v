@@ -1,0 +1,176 @@
+module machine(inc_pc, load_acc, load_pc,rd,wr,load_ir,datactl_ena,halt, clk1, zero, ena,opcode); 
+output inc_pc, load_acc, load_pc, rd,wr, load_ir;
+output datactl_ena,halt;
+input clk1,zero,ena;
+input [2:0] opcode;
+reg inc_pc, load_acc, load_pc, rd, wr, load_ir;
+reg datactl_ena,halt;
+reg [2:0] state;
+parameter	HLT=3'b000,
+			SKZ=3'b001,
+			ADD=3'b010,
+			ANDD=3'b011,
+			XORR=3'b100,
+			LDA=3'b101,
+			STO=3'b110,
+			JMP=3'b111;
+			
+always @(negedge clk1)
+begin
+    if(!ena)
+begin
+	state<=3'b000;
+	{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+	{wr,load_ir,datactl_ena,halt}<=4'b0000;
+end
+else
+	ctl_cycle;
+end
+//----begin of task ctl_cycle---
+task ctl_cycle;
+begin
+	casex(state)
+	3'b000:       //load high 8 bits in struction
+		begin
+			{inc_pc,load_acc,load_pc,rd}<=4'b0001;	
+			{wr,load_ir,datactl_ena,halt}<=4'b0100;
+			state<=3'b001;
+		end
+		
+	3'b001: //PC加1，读低8位指令
+		begin
+			{inc_pc,load_acc,load_pc,rd}<=4'b1001;
+			{wr,load_ir,datactl_ena,halt}<=4'b0100;
+			state<=3'b010;
+		end
+		
+	3'b010: //空闲
+		begin
+			{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+			{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			state<=3'b011;
+		end
+		
+	3'b011: //分析指令
+	begin
+		if(opcode==HLT)
+			begin 
+				{inc_pc,load_acc,load_pc,rd}<=4'b1000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0001;
+			end
+		else
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b1000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		state<=3'b100;
+	end 
+		
+	3'b100: //读取/输出操作数
+	begin
+		if(opcode==JMP)
+			begin 
+				{inc_pc,load_acc,load_pc,rd}<=4'b0010;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		if(opcode==ADD || opcode==ANDD ||opcode==XORR || opcode==LDA )
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0001;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		if(opcode==STO)
+			begin 
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0010;
+			end
+		else
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		state<=3'b101;
+	end
+	 	
+	3'b101: //操作
+	begin
+		if(opcode==ADD || opcode==ANDD ||opcode==XORR || opcode==LDA )
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0001;
+				//{inc_pc,load_acc,load_pc,rd}<=4'b0101;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		if(opcode==SKZ && zero==1)
+			begin
+				 {inc_pc,load_acc,load_pc,rd}<=4'b1000;
+				 {wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		if(opcode==JMP)
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b1010;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		if(opcode==STO)
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b1010;
+			end
+		else
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+			state<=3'b110;
+	end
+	
+	3'b110: //空闲
+		begin
+		if(opcode==STO)
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0010;
+			end
+		if(opcode==ADD || opcode==ANDD ||opcode==XORR || opcode==LDA )
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0101;
+				//{inc_pc,load_acc,load_pc,rd}<=4'b0001;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else 
+		begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+		end
+		state<=3'b111;
+	end 
+	
+	3'b111: //PC操作
+	begin
+		if(opcode==SKZ && zero==1)
+			begin 
+				{inc_pc,load_acc,load_pc,rd}<=4'b1000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+		else
+			begin
+				{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+				{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			end
+			state<=3'b000;
+	end 
+		
+	default:
+		begin
+			{inc_pc,load_acc,load_pc,rd}<=4'b0000;
+			{wr,load_ir,datactl_ena,halt}<=4'b0000;
+			state<=3'b000;
+		end
+	endcase
+end
+endtask
+
+endmodule 
